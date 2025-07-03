@@ -1,11 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { registerUser, loginUser } = require('../controllers/userController');
+const { registerUser, loginUser, getProfile } = require('../controllers/userController');
+const { protect } = require('../middleware/authMiddleware');
 
-// Роут для регистрации
+// Регистрация
 router.post('/register', registerUser);
 
-// Роут для входа
+// Авторизация
 router.post('/login', loginUser);
+
+// Профиль пользователя (доступен только с токеном)
+router.get('/profile', protect, getProfile);
 
 module.exports = router;

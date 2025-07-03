@@ -1,59 +1,59 @@
-const generateToken = require('../utils/generateToken');
+const User = require('../models/User');
+const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const User = require('../models/userModel');
 
-// Регистрация
+// Регистрация пользователя
 const registerUser = async (req, res) => {
   const { name, email, password } = req.body;
+  try {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return res.status(400).json({ message: 'Пользователь уже существует' });
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: 'Все поля обязательны' });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await User.create({ name, email, password: hashedPassword });
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(201).json({ token });
+  } catch (err) {
+    res.status(500).json({ message: 'Ошибка регистрации' });
   }
-
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    return res.status(400).json({ message: 'Пользователь уже существует' });
-  }
-
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash(password, salt);
-
-  const newUser = await User.create({
-    name,
-    email,
-    password: hashedPassword,
-  });
-
-  res.status(201).json({
-    message: 'Пользователь создан успешно',
-    user: newUser,
-    token: generateToken(newUser._id),
-  });
 };
 
-// Вход
+// Вход пользователя
 const loginUser = async (req, res) => {
   const { email, password } = req.body;
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ message: 'Неверный email или пароль' });
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email и пароль обязательны' });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: 'Неверный email или пароль' });
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({ token });
+  } catch (err) {
+    res.status(500).json({ message: 'Ошибка входа' });
   }
+};
 
-  const user = await User.findOne({ email });
-  const isMatch = await bcrypt.compare(password, user?.password || '');
-
-  if (!user || !isMatch) {
-    return res.status(401).json({ message: 'Неверный email или пароль' });
+// 🔒 Получение профиля
+const getProfile = async (req, res) => {
+  try {
+    const user = req.user;
+    res.status(200).json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Ошибка при получении профиля' });
   }
-
-  res.status(200).json({
-    message: 'Вход выполнен успешно',
-    user,
-    token: generateToken(user._id),
-  });
 };
 
 module.exports = {
   registerUser,
   loginUser,
+  getProfile,
 };
